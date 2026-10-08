@@ -1,0 +1,12 @@
+# Evaluation env (python 3.12). Tested together; vllm pins torch 2.9.1.
+vllm==0.14.0
+openai-harmony==0.0.8
+syntheseus[root-aligned]==0.7.2
+rdkit==2026.3.4
+onnxruntime
+scikit-learn
+joblib
+requests
+fastmcp
+rxnmapper
+-e tools/reaction-mcp

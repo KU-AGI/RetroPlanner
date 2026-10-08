@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reaction-mcp"
+version = "0.1.0"
+description = "MCP server for single-step retrosynthesis (R-SMILES, LocalRetro), atom mapping, bond changes and templates."
+requires-python = ">=3.10"
+dependencies = [
+  "fastmcp>=0.4",
+  "rdkit>=2023.9",
+  "rxnmapper>=0.3",
+]
+
+[project.scripts]
+reaction-mcp = "reaction_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["reaction_mcp*"]

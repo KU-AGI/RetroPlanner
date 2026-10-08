@@ -1,0 +1,46 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Superseded copies. The working tree accumulated these; none are carried, and
+# none should come back in via an rsync from it.
+*.bak
+*.bak.*
+.bak/
+
+# The heavy inputs stay in the working tree -- see PATHS.md. These are matched
+# by extension and by name rather than by directory, so that a careless rsync
+# from the working tree cannot quietly turn a 14 MB repo into 500 GB, while the
+# small artifacts the repo exists to carry are unaffected.
+*.pt
+*.ckpt
+*.pth
+*.onnx
+*.parquet
+*.npy
+*.npz
+*.pkl
+*.tar
+*.zip
+*.dump.jsonl
+
+# tools/reaction-mcp is kept at its original path; models/ external/ data/ results/ are
+# brought in by config/import_worktree.sh, and logs/ a run creates stay
+# out of git. Anchored and one level deep on purpose: it must not
+# catch reaction_mcp/data/, the package's own named_reaction_smirks.json.
+/tools/reaction-mcp/data
+/tools/reaction-mcp/models
+/tools/reaction-mcp/results
+/tools/reaction-mcp/external
+/tools/reaction-mcp/logs
+/tools/reaction-mcp/analysis
+/tools/reaction-mcp/eval_protocol
+/evaluation/eval_protocol/results
+/evaluation/eval_protocol/rows
+/evaluation/eval_protocol/derived
+/external/baseline
+/external/sci-data
+
+# Brought in by config/import_worktree.sh.
+/checkpoints

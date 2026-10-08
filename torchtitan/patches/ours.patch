@@ -1,0 +1,378 @@
+diff --git a/scripts/checkpoint_conversion/numerical_tests_kimi.py b/scripts/checkpoint_conversion/numerical_tests_kimi.py
+index ba4471144..a42fdba5d 100644
+--- a/scripts/checkpoint_conversion/numerical_tests_kimi.py
++++ b/scripts/checkpoint_conversion/numerical_tests_kimi.py
+@@ -86,7 +86,6 @@ def run_hf(hf_model_path, image_size, dtype, device):
+         .reshape(image_size, image_size, 3)
+         .to(torch.uint8)
+     )
+-    # pyrefly: ignore [not-callable]
+     batch = proc(
+         text=[_PROMPT], images=[Image.fromarray(raw_image.numpy())], return_tensors="pt"
+     )
+@@ -255,7 +254,7 @@ def compare(ref_logits, tt_logits) -> bool:
+         f"  KL={kl:.4e}  cos={cos:.6f}  max_diff={max_diff:.4e}  "
+         f"top1={'Y' if top1 else 'N'}  top5={ov5:.0%}"
+     )
+-    passed = abs(kl) < 1e-3  # pyrefly: ignore [bad-argument-type]
++    passed = abs(kl) < 1e-3
+     print(
+         "RESULT: PASS (KL < 1e-3 -- fp noise)."
+         if passed
+diff --git a/scripts/download_hf_assets.py b/scripts/download_hf_assets.py
+index e5d88ce6b..b652b3f61 100644
+--- a/scripts/download_hf_assets.py
++++ b/scripts/download_hf_assets.py
+@@ -169,7 +169,6 @@ def download_hf_assets(
+     missed_files = []
+ 
+     # Download files with progress bar
+-    # pyrefly: ignore [bad-context-manager]
+     with tqdm(total=len(files_found), desc="Downloading files", unit="file") as pbar:
+         for filename in files_found:
+             try:
+diff --git a/torchtitan/components/lora.py b/torchtitan/components/lora.py
+index 097b56dbc..08fa4b006 100644
+--- a/torchtitan/components/lora.py
++++ b/torchtitan/components/lora.py
+@@ -68,7 +68,7 @@ def _get_lora_cls(parent_cls: type) -> type:
+     if parent_cls in _lora_class_cache:
+         return _lora_class_cache[parent_cls]
+ 
+-    parent_config_cls = parent_cls.Config  # pyrefly: ignore [missing-attribute]
++    parent_config_cls = parent_cls.Config
+ 
+     class LoRALinear(parent_cls):  # type: ignore[valid-type, misc]
+         @dataclass(kw_only=True, slots=True)
+@@ -187,7 +187,7 @@ class LoRAConverter(ModelConfigConverter):
+         """Create a LoRALinear.Config from a base Linear.Config."""
+         assert cfg._owner is not None
+         lora_cls = _get_lora_cls(cfg._owner)
+-        return lora_cls.Config(  # pyrefly: ignore [missing-attribute]
++        return lora_cls.Config(
+             **{f.name: getattr(cfg, f.name) for f in fields(cfg) if f.init},
+             rank=self.rank,
+             alpha=self.alpha,
+diff --git a/torchtitan/components/loss.py b/torchtitan/components/loss.py
+index eb8b69721..fab44b9e5 100644
+--- a/torchtitan/components/loss.py
++++ b/torchtitan/components/loss.py
+@@ -109,7 +109,6 @@ class _LossParallelCrossEntropy(torch.autograd.Function):
+         return result
+ 
+     @staticmethod
+-    # pyrefly: ignore [bad-override]
+     def forward(
+         ctx,
+         logits: torch.Tensor,
+@@ -834,7 +833,6 @@ class _DecoderOutputGradientBackProp(torch.autograd.Function):
+     """
+ 
+     @staticmethod
+-    # pyrefly: ignore [bad-override]
+     def forward(
+         ctx,
+         hidden_states: torch.Tensor,
+diff --git a/torchtitan/components/metrics.py b/torchtitan/components/metrics.py
+index f63612eab..1e3eccd78 100644
+--- a/torchtitan/components/metrics.py
++++ b/torchtitan/components/metrics.py
+@@ -37,7 +37,6 @@ DeviceMemStats = namedtuple(
+ 
+ class DeviceMemoryMonitor:
+     def __init__(self, device: str = f"{device_type}:0"):
+-        # pyrefly: ignore [read-only]
+         self.device = torch.device(device)  # device object
+         self.device_name = device_module.get_device_name(self.device)
+         self.device_index = device_module.current_device()
+diff --git a/torchtitan/components/optimizer.py b/torchtitan/components/optimizer.py
+index 1a7afaf9a..ff50d11bf 100644
+--- a/torchtitan/components/optimizer.py
++++ b/torchtitan/components/optimizer.py
+@@ -487,7 +487,6 @@ def register_moe_load_balancing_hook(
+                     tokens_per_expert_E_by_layer,
+                     # pyrefly: ignore [unbound-name]
+                     device_mesh=dtensor_mesh,
+-                    # pyrefly: ignore [unbound-name]
+                     placements=[Replicate()] * dtensor_mesh.ndim,
+                     run_check=False,
+                 )
+diff --git a/torchtitan/distributed/compile.py b/torchtitan/distributed/compile.py
+index b57cc0364..4a2927425 100644
+--- a/torchtitan/distributed/compile.py
++++ b/torchtitan/distributed/compile.py
+@@ -46,7 +46,7 @@ def apply_compile(model: nn.Module, compile_config: CompileConfig) -> None:
+     # python mutations in the backward. Setting this flag accepts this eager
+     # and compile divergence by skipping reapplication of side effects.
+     torch._dynamo.config.skip_fwd_side_effects_in_bwd_under_checkpoint = (
+-        True  # pyrefly: ignore [bad-assignment]
++        True
+     )
+ 
+     backend = _maybe_regional_inductor_backend(model, compile_config.backend)
+diff --git a/torchtitan/distributed/pipeline_parallel.py b/torchtitan/distributed/pipeline_parallel.py
+index 485cba6e6..70074788e 100644
+--- a/torchtitan/distributed/pipeline_parallel.py
++++ b/torchtitan/distributed/pipeline_parallel.py
+@@ -357,7 +357,6 @@ def _build_pipeline_schedule(
+             "Only PipelineScheduleSingle (single stage), PipelineScheduleMulti (multistage), "
+             "and _PipelineScheduleRuntime support csv schedules"
+         )
+-        # pyrefly: ignore [missing-attribute]
+         schedule._load_csv(pp_schedule_csv)
+ 
+     return schedule
+diff --git a/torchtitan/distributed/tensor_parallel.py b/torchtitan/distributed/tensor_parallel.py
+index d2e66b156..aab932b63 100644
+--- a/torchtitan/distributed/tensor_parallel.py
++++ b/torchtitan/distributed/tensor_parallel.py
+@@ -87,12 +87,12 @@ class NoParallel(ParallelStyle):
+             device_mesh,
+             None,
+             partial(
+-                self._prepare_input_fn,  # pyrefly: ignore [bad-argument-type]
++                self._prepare_input_fn,
+                 self.input_layout,
+                 self.desired_input_layout,
+             ),
+             partial(
+-                self._prepare_output_fn,  # pyrefly: ignore [bad-argument-type]
++                self._prepare_output_fn,
+                 self.output_layout,
+                 self.use_local_output,
+             ),
+diff --git a/torchtitan/experiments/__init__.py b/torchtitan/experiments/__init__.py
+index c430ba208..a3b4416f3 100644
+--- a/torchtitan/experiments/__init__.py
++++ b/torchtitan/experiments/__init__.py
+@@ -19,5 +19,6 @@ _supported_experiments = frozenset(
+         "alphabet_sort",
+         "dapo_math",
+         "search_r1",
++        "retroplanner",
+     ]
+ )
+diff --git a/torchtitan/hf_datasets/multimodal/mm_datasets.py b/torchtitan/hf_datasets/multimodal/mm_datasets.py
+index 5d6e9d1e9..cbeb1ba16 100644
+--- a/torchtitan/hf_datasets/multimodal/mm_datasets.py
++++ b/torchtitan/hf_datasets/multimodal/mm_datasets.py
+@@ -485,7 +485,6 @@ class HuggingFaceMultiModalDataset(IterableDataset, Stateful):
+             state["hf_dataset_state"] = self._data.state_dict()
+ 
+         if self.enable_packing:
+-            # pyrefly: ignore [bad-typed-dict-key]
+             state["packer_state"] = {
+                 "sample_buffer": list(self.packer._sample_buffer.values()),
+                 "packed_samples": list(self.packer.packed_samples),
+diff --git a/torchtitan/hf_datasets/text_datasets.py b/torchtitan/hf_datasets/text_datasets.py
+index d3d09ff0b..6c1ed3388 100644
+--- a/torchtitan/hf_datasets/text_datasets.py
++++ b/torchtitan/hf_datasets/text_datasets.py
+@@ -520,7 +520,6 @@ class ChatDataset(IterableDataset, Stateful):
+                 yield self._flush_buffers()
+         while True:
+             for sample in self._get_data_iter():
+-                # pyrefly: ignore [bad-argument-type]
+                 result = self._tokenize_sample(sample)
+                 if result is None:
+                     self._sample_idx += 1
+diff --git a/torchtitan/models/common/attention.py b/torchtitan/models/common/attention.py
+index eb94fd8ff..b7257f90d 100644
+--- a/torchtitan/models/common/attention.py
++++ b/torchtitan/models/common/attention.py
+@@ -791,7 +791,7 @@ class FusedQKVLinear(BaseQKVLinear):
+     @spmd.local_map(
+         out_types=({"dp": spmd.S(0), "cp": spmd.S(1), "tp": spmd.S(2)},) * 3
+     )
+-    def forward(  # pyrefly: ignore[bad-override]
++    def forward(
+         self, x: torch.Tensor
+     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+         bs, seqlen, _ = x.shape
+diff --git a/torchtitan/models/common/token_dispatcher.py b/torchtitan/models/common/token_dispatcher.py
+index 03fa6ebda..7573651be 100644
+--- a/torchtitan/models/common/token_dispatcher.py
++++ b/torchtitan/models/common/token_dispatcher.py
+@@ -225,7 +225,7 @@ class BaseEPTokenDispatcher(LocalTokenDispatcher):
+         batch_idx = local_indices // local_seq_len
+         global_seq_len = local_seq_len * self.sp_size
+         global_indices = batch_idx * global_seq_len + local_pos
+-        return torch.add(  # pyrefly: ignore [no-matching-overload]
++        return torch.add(
+             global_indices, self.sp_rank * local_seq_len
+         )
+ 
+@@ -381,7 +381,6 @@ class AllToAllTokenDispatcher(BaseEPTokenDispatcher):
+             input_split_sizes=output_splits,
+         )
+ 
+-    # pyrefly: ignore [bad-override]
+     def dispatch(
+         self,
+         x_TD: torch.Tensor,
+@@ -568,7 +567,6 @@ class AllToAllTokenDispatcher(BaseEPTokenDispatcher):
+         out_unpermuted_RD[permuted_indices, :] = routed_output_RD
+         return out_unpermuted_RD
+ 
+-    # pyrefly: ignore [bad-override]
+     def combine(
+         self,
+         routed_output_RD: torch.Tensor,
+@@ -895,7 +893,6 @@ class DeepEPTokenDispatcher(BaseEPTokenDispatcher):
+                 num_topk=self.top_k,
+             )
+ 
+-    # pyrefly: ignore [bad-override]
+     def dispatch(
+         self,
+         x_TD: torch.Tensor,
+@@ -929,7 +926,6 @@ class DeepEPTokenDispatcher(BaseEPTokenDispatcher):
+         metadata = DeepEPDispatchMetadata(state=state)
+         return hidden_states_RD, num_global_tokens_per_local_expert_e, metadata
+ 
+-    # pyrefly: ignore [bad-override]
+     def combine(
+         self,
+         routed_output_RD: torch.Tensor,
+@@ -1025,7 +1021,6 @@ class HybridEPTokenDispatcher(BaseEPTokenDispatcher):
+         # instead of recomputing them. This must happen before apply_ac.
+         from torchtitan.distributed.deepep import hybridep  # noqa: F401
+ 
+-    # pyrefly: ignore [bad-override]
+     def dispatch(
+         self,
+         x_TD: torch.Tensor,
+@@ -1059,7 +1054,6 @@ class HybridEPTokenDispatcher(BaseEPTokenDispatcher):
+         metadata = DeepEPDispatchMetadata(state=state)
+         return hidden_states_RD, num_global_tokens_per_local_expert_e, metadata
+ 
+-    # pyrefly: ignore [bad-override]
+     def combine(
+         self,
+         routed_output_RD: torch.Tensor,
+diff --git a/torchtitan/models/flux/flux_datasets.py b/torchtitan/models/flux/flux_datasets.py
+index f6d35c7a5..3c468cd38 100644
+--- a/torchtitan/models/flux/flux_datasets.py
++++ b/torchtitan/models/flux/flux_datasets.py
+@@ -260,7 +260,6 @@ class FluxDataset(IterableDataset, Stateful):
+ 
+             # skip low quality image or image with color channel = 1
+             if sample_dict["image"] is None:
+-                # pyrefly: ignore [missing-attribute]
+                 sample = sample.get("__key__", "unknown")
+                 logger.warning(
+                     f"Low quality image {sample} is skipped in Flux Dataloader."
+diff --git a/torchtitan/models/flux/parallelize.py b/torchtitan/models/flux/parallelize.py
+index eee26d42c..d67cb53ea 100644
+--- a/torchtitan/models/flux/parallelize.py
++++ b/torchtitan/models/flux/parallelize.py
+@@ -256,7 +256,6 @@ def parallelize_encoders(
+     assert isinstance(hf_module, nn.Module)
+     if parallel_dims.spmd_backend == "spmd_types":
+         annotate_dp_cp_params_as_r(hf_module, parallel_dims)
+-    # pyrefly: ignore [missing-attribute]
+     for block in hf_module.encoder.block:
+         fully_shard(block, **fsdp_config)
+     fully_shard(hf_module, **fsdp_config)
+diff --git a/torchtitan/models/flux/tokenizer.py b/torchtitan/models/flux/tokenizer.py
+index ef7c92aeb..26e697e4f 100644
+--- a/torchtitan/models/flux/tokenizer.py
++++ b/torchtitan/models/flux/tokenizer.py
+@@ -58,7 +58,7 @@ class FluxTokenizerContainer(BaseTokenizer):
+         Returns:
+             A dict with keys "clip" and "t5", each mapping to a torch.Tensor.
+         """
+-        return {  # pyrefly: ignore [bad-return]
++        return {
+             "clip": self.clip_tokenizer.encode(text),
+             "t5": self.t5_tokenizer.encode(text),
+         }
+@@ -140,7 +140,6 @@ class FluxTestTokenizer(BaseTokenizer):
+             tokens = self._pad_and_chunk_tokens(tokens, self._max_length, self.pad_id)
+             return torch.tensor(tokens)
+ 
+-    # pyrefly: ignore [bad-override]
+     def decode(self, t: list[int]) -> str:
+         """
+         Decode function. This function will not be called.
+@@ -165,7 +164,6 @@ class FluxTokenizer(BaseTokenizer):
+         self.is_clip = "clip" in model_path.lower()
+ 
+         if self.is_clip:
+-            # pyrefly: ignore [bad-assignment]
+             self._tokenizer: CLIPTokenizer = CLIPTokenizer.from_pretrained(
+                 model_path, max_length=max_length, **hf_kwargs
+             )
+diff --git a/torchtitan/models/flux/trainer.py b/torchtitan/models/flux/trainer.py
+index 7471bce74..c47652e30 100644
+--- a/torchtitan/models/flux/trainer.py
++++ b/torchtitan/models/flux/trainer.py
+@@ -307,7 +307,6 @@ class FluxTrainer(Trainer):
+         if self.gradient_accumulation_steps > 1:
+             raise ValueError("FLUX doesn't support gradient accumulation for now.")
+ 
+-        # pyrefly: ignore [no-matching-overload]
+         input_dict, labels = next(data_iterator)
+ 
+         loss = self.forward_backward_step(input_dict=input_dict, labels=labels)
+diff --git a/torchtitan/models/flux/validate.py b/torchtitan/models/flux/validate.py
+index 07290cfd4..463e8413a 100644
+--- a/torchtitan/models/flux/validate.py
++++ b/torchtitan/models/flux/validate.py
+@@ -122,7 +122,6 @@ class FluxValidator(Validator):
+         clip_encoder: FluxEmbedder,
+         dump_folder: str,
+     ):
+-        # pyrefly: ignore [read-only]
+         self.device = device
+         self._dtype = _dtype
+         self.autoencoder = autoencoder
+diff --git a/torchtitan/models/gpt_oss/moe.py b/torchtitan/models/gpt_oss/moe.py
+index 00e4b13b2..7950882c0 100644
+--- a/torchtitan/models/gpt_oss/moe.py
++++ b/torchtitan/models/gpt_oss/moe.py
+@@ -30,7 +30,6 @@ class ScaleBiasForward(torch.autograd.Function):
+     """
+ 
+     @staticmethod
+-    # pyrefly: ignore [bad-override]
+     def forward(ctx, bias, tp_degree, dtype):
+         ctx.tp_degree = tp_degree
+         if tp_degree > 1:
+diff --git a/torchtitan/models/gpt_oss/parallelize.py b/torchtitan/models/gpt_oss/parallelize.py
+index 4c9feb372..7a2132c88 100644
+--- a/torchtitan/models/gpt_oss/parallelize.py
++++ b/torchtitan/models/gpt_oss/parallelize.py
+@@ -37,7 +37,6 @@ def _raise_dynamo_recompile_limit(
+     # TODO: remove once https://github.com/pytorch/pytorch/issues/187073 is fixed
+     min_recompile_limit = 12 if _has_sliding_window_attention(model) else 10
+     # PyTorch types this config as Literal[8], but runtime accepts larger ints.
+-    # pyrefly: ignore [bad-assignment]
+     torch._dynamo.config.recompile_limit = max(
+         torch._dynamo.config.recompile_limit,
+         min_recompile_limit,
+diff --git a/torchtitan/models/llama3/parallelize.py b/torchtitan/models/llama3/parallelize.py
+index 97776b238..70c2e2287 100644
+--- a/torchtitan/models/llama3/parallelize.py
++++ b/torchtitan/models/llama3/parallelize.py
+@@ -46,7 +46,7 @@ def parallelize_llama(
+     else:
+         if parallel_dims.cp_enabled:
+             apply_cp_to_forward(
+-                # pyrefly: ignore [missing-attribute, not-callable]
++                # pyrefly: ignore [missing-attribute]
+                 [block.attention.inner_attention for block in model.layers.values()],
+                 parallel_dims.get_mesh("cp"),
+             )
+diff --git a/torchtitan/models/utils.py b/torchtitan/models/utils.py
+index ba6da084b..ad38303af 100644
+--- a/torchtitan/models/utils.py
++++ b/torchtitan/models/utils.py
+@@ -124,7 +124,6 @@ class MoEStateDictAdapter(StateDictAdapter):
+         dim_i_placements = []
+ 
+         # Find all the device mesh dimensios that shard on dim-i
+-        # pyrefly: ignore [bad-argument-type]
+         for i, name in enumerate(device_mesh.mesh_dim_names):
+             placement = dtensor_placements[i]
+             if placement.dim == dim:
