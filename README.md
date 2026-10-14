@@ -1,5 +1,8 @@
 # RetroPlanner
 
+<a href="https://arxiv.org/abs/2610.16391" target="_blank"><img src="https://img.shields.io/badge/arXiv-2610.16391-B31B1B?style=flat&logo=arXiv&logoColor=white" alt="Paper"></a>
+<a href="https://huggingface.co/KU-AGI/RetroPlanner" target="_blank"><img src="https://img.shields.io/badge/RetroPlanner-FFD21E?style=flat&logo=huggingface&logoColor=white" alt="RetroPlanner"></a>
+
 Multi-route expansion and multi-objective reasoning for LLM-based retrosynthesis
 planning. This repository holds the evaluation harness, the single-step model servers
 it runs on (R-SMILES by default), the data-construction pipeline, and the SFT module
