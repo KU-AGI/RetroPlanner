@@ -1898,7 +1898,7 @@ def evidence_for(board: Board, dp: DP, actions: list) -> dict:
         front, beaten = route_front(board)
         for route in board.routes:
             vals = [signals_of_rxn(board.rxns[r])[1]
-                    for r in _route_rxns(board, route.root_rxn)]
+                    for r in _route_rxns(board, route.root_rxn, route)]
             vals = [v for v in vals if v is not None]
             ax = route_axes(board, route)
             ev["routes"].append({"route": route.label,

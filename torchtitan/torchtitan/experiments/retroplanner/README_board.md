@@ -109,7 +109,7 @@ against a cross-rank one.
 
 **Held out.** `RetroValidator` runs the same role and capture metrics over the
 val split (`val/*`, split by target) and over a depth-stratified train subset
-(`trainprobe/*`, from `scripts/make_probe_subsets.py`). The two are stratified to
+(`trainprobe/*`, a depth-stratified subset of the train split). The two are stratified to
 the same depth mix, so a gap between them reads as memorisation rather than as a
 difference in how deep their episodes are.
 

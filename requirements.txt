@@ -9,4 +9,5 @@ joblib
 requests
 fastmcp
 rxnmapper
+matplotlib==3.11.1
 -e tools/reaction-mcp

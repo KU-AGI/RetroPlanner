@@ -73,8 +73,12 @@ backends use that to stop packed trajectories from attending to each other.
 
 ## Running it
 
+The board corpus and its launcher are in [`README_board.md`](README_board.md)
+(`scripts/prepare_board_dataset.py`, then `run_board_sft.sh`) -- that is the path
+the released checkpoint was trained on. `scripts/prepare_dataset.py` below
+validates and splits the route-only corpus.
+
 ```bash
-# 1. validate and split the corpus
 python -m torchtitan.experiments.retroplanner.scripts.prepare_dataset \
     --input "$RP_ROOT"/tools/reaction-mcp/data/train_clean/\
 sft_distilled/conv_full7_k50_paroutes.oss.jsonl \
@@ -82,15 +86,9 @@ sft_distilled/conv_full7_k50_paroutes.oss.jsonl \
     --seq-len 16384 \
     --hf-assets-path "$GPT_OSS_ASSETS" \
     --wandb
-
-# 2. smoke the pipeline (10 steps at full seq_len, no wandb, no checkpoint)
-CONFIG=sft_gpt_oss_20b_rs_smoke ./torchtitan/experiments/retroplanner/run_sft.sh
-
-# 3. train
-./torchtitan/experiments/retroplanner/run_sft.sh
 ```
 
-`run_sft.sh` sets the wandb environment (`WANDB_PROJECT`, `WANDB_RUN_NAME`,
+`run_board_sft.sh` sets the wandb environment (`WANDB_PROJECT`, `WANDB_RUN_NAME`,
 `WANDB_RUN_GROUP`, …) that torchtitan's `WandBLogger` reads. Set
 `WANDB_MODE=offline` to record locally.
 
@@ -141,4 +139,3 @@ checked in here. `flex` is the default; override with `RETRO_ATTN_BACKEND`.
 | `config_registry.py` | the board SFT configs (see `README_board.md`) |
 | `scripts/prepare_dataset.py` | validate, split, report |
 | `compat.py` | shims for torchtitan main against an older torch |
-| `tests/test_retroplanner.py` | CPU tests for alignment, masking and the accumulator |

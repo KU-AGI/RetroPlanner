@@ -475,13 +475,14 @@ def run_target(target: str, world: LiveWorld, client: RawClient,
 
     routes = []
     for route in board.routes:
-        rxns = R._route_rxns(board, route.root_rxn)
+        rxns = R._route_rxns(board, route.root_rxn, route)
         vals = [R.signals_of_rxn(board.rxns[r], style)[1] for r in rxns]
         vals = [v for v in vals if v is not None]
-        leaves = R._route_leaves(board, route.root_rxn)
+        leaves = R._route_leaves(board, route.root_rxn, route)
         priced = [board.mols[m].price_ln for m in leaves if board.mols[m].price_ln is not None]
         routes.append({
             "label": route.label, "n_steps": len(rxns),
+            "choices": dict(route.choices),
             "weakest": min(vals) if vals else None,
             "n_leaves": len(leaves), "n_unpriced": len(leaves) - len(priced),
             "cost_usd": round(sum(math.exp(v) for v in priced), 2) if priced else None,

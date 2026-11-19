@@ -74,10 +74,15 @@ def write_cache(name, new):
     C.NODE_SCORES.mkdir(parents=True, exist_ok=True)
     cur = read_cache(name)
     cur.update(new)
-    tmp = str(cache_path(name)) + ".tmp"
-    with open(tmp, "w") as fh:
-        json.dump(cur, fh)
-    os.replace(tmp, cache_path(name))
+    tmp = f"{cache_path(name)}.tmp.{os.getpid()}"
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(cur, fh)
+        os.replace(tmp, cache_path(name))
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
     return len(cur)
 
 

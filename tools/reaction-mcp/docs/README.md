@@ -78,9 +78,7 @@ bash scripts/launch_replicas.sh localretro 8
 ```
 
 The pool's default URLs already point at the single-server ports, so once a
-server answers `/health` the pool uses it automatically. `scripts/singlestep_pool_server.py`
-exposes the same consensus on the SSR wire contract (`{smiles, top_n}`) for the
-route-search drivers.
+server answers `/health` the pool uses it automatically.
 
 **Forward round-trip.** `round_trip_filter` (in `consensus.py`) checks whether a
 forward model regenerates the product from each precursor set. No forward

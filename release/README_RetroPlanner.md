@@ -94,7 +94,7 @@ bash scripts/feas_forward_fleet.sh
 cd ../..
 
 # serve the checkpoint on vLLM and plan routes for your targets
-TARGETS_FILE=/path/to/targets.jsonl \
+TARGETS_FILE=/path/to/targets.jsonl ITER_MAX_ROLLOUTS=1 STOP_ON_SOLVE=0 \
   bash evaluation/eval_protocol/runners/retroplanner_rsmiles.sh
 ```
 
@@ -126,13 +126,12 @@ ports and conda env names come from [`config/env.sh`](https://github.com/KU-AGI/
 - **Two calls per turn.** In training, the token after the analysis channel's `<|end|>`
   is not supervised. So the harness stops the first call at `<|end|>`, appends
   `<|start|>assistant` itself, and makes a second call for the tool call (`--two-stage`).
-- **Restarts.** Each episode ends at the first complete route it finds. The harness then
-  starts a new episode on a fresh board, sampling at temperature 0.6 with a different
-  seed each time. This continues until the target has used up its budget of distinct
-  molecules opened (`ITER_MAX_BUDGET`, default 500; a molecule already opened in an
-  earlier episode is not counted again) or reached the rollout cap (`ITER_MAX_ROLLOUTS`,
-  default 40). The routes from all episodes are pooled, so one target can return several
-  alternative routes.
+- **One episode per target.** The model plans each target in a single episode on one
+  board. It does not stop at the first route: `done` claims a route without ending
+  anything, so the model keeps claiming alternative routes on the same board and then
+  hands over. The episode ends at the handover, or when the harness cuts it off: the
+  single-step call budget (`--budget`, 300), the turn cap (`--max-turns`, 120),
+  5 malformed actions in a row, or a board with nothing left to open.
 
 ## Limitations
 

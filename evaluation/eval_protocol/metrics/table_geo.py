@@ -1,45 +1,29 @@
-"""Main table: Success Rate, Routes, Better-Than-Ref, Plaus, RT and Price at a FIXED budget B.
+"""Main table at a FIXED budget B: Success Rate, Routes, Better-Than-Ref, Plaus, RT, Price.
 
-R-SMILES is the single-step model for every arm. Each column is read off what an arm had
-after B single-step expansions, so the comparison is budget-matched rather than
-run-to-completion:
+R-SMILES everywhere; every column is read off what an arm had after B single-step expansions.
+The budget unit is UNIQUE MOLECULES -- RetroAgent (`seen_smiles`) and Retro-R1 (`mol_dict`)
+count only unique molecules and keep no revisit record, and so does RetroPlanner's
+`found_at_unique`, so it is the one unit all arms share.
 
-  search arms    MCTS / Retro*-0 / Retro* / MORetro* were re-run at the budget, or stamp
-                 each route with the call it was found at.
-  Retro-R1       one continuous rollout over several rounds; the pooled file stamps every
-                 route within its run, and the runs are laid end to end (from_pooled).
-  RetroAgent     restarts failed rollouts until a route is found; same treatment, charged
-                 what each run actually spent (SPEND, built by runners/build_spend.py).
-  RetroPlanner   ends each rollout at its first complete route and restarts, spending the
-                 rest of the budget on alternative routes; every route carries the number of
-                 unique molecules seen when it was found (from_board).
-
-The budget unit is unique molecules: RetroAgent and Retro-R1 count only unique molecules and
-keep no revisit record, so it is the one unit all arms share.
-
-An arm with no file at this budget prints '--', never 0: "we did not measure it" and "it
-scored nothing" are different claims.
+Cut at B:  search arms -> re-run at the budget, or found_at_calls;  Retro-R1 / RetroAgent ->
+independent runs laid end to end, charged by UNION (needs SPEND_DIR/expansions*.json from
+runners/extract_expansions.py);  RetroPlanner -> found_at_unique.
 
 Route per target: of the Pareto non-dominated routes on (plaus, rt, price), the one with the
-highest (q_p + q_rt + u_c)/3, u_c = 1 - log(1+min(q_c, P_max))/log(1+P_max). The price scale
-is fixed by P_max alone, so the same route gets the same score whichever planner returns it.
-Routes reaching the same leaf set count as one.
+highest (q_p + q_rt + u_c)/3, u_c = 1 - log(1+min(q_c, P_max))/log(1+P_max). Same leaf set =
+one route. No file at this budget prints '--', never 0.
 
-IMPUTED QUALITY (IMPUTE=1). A target with no stock-gated route by B scores 0 / 0 / PRICE_CAP
-and the denominator is every benchmark target. The cap also CLIPS the solved side, because
-some representative routes cost more than it and without clipping, failing those targets
-would score better than solving them. BTR is imputed the same way: its denominator is every
-target that HAS a reference route. IMPUTE=0 reports quality over solved targets only. The
-two tables answer different questions, so never publish only one.
+IMPUTE=1: no stock-gated route by B scores 0/0/PRICE_CAP over every benchmark target (BTR:
+every target with a reference route); the cap also clips the solved side. IMPUTE=0 scores
+solved targets only. Publish both.
 
-Run from $RP_MCP (runners/table_main.sh does); the data paths are relative to it.
+Run from $RP_MCP (runners/table_main.sh does).
 
   BENCH=uspto|chembl   BUDGET=50|300   IMPUTE=1|0   PRICE_CAP=1000
   inputs: R1_<bench> RA_<bench> RP_<bench>, SPEND_DIR
 """
 import json, glob, os, sys, math, statistics as st, collections, importlib.util, random, re
-# config/paths.py, loaded by file location under its own name rather than as `paths`, where
-# any other module of that name would shadow it.
+# config/paths.py, loaded by file location under its own name so no other `paths` shadows it.
 _spec = importlib.util.spec_from_file_location(
     "rp_paths", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "config", "paths.py"))
 _RP = importlib.util.module_from_spec(_spec)
@@ -70,10 +54,8 @@ for p in glob.glob("data/route_search/feas/rt_overlay_*.json"):
 # ---------------------------------------------------------------------------- the four stamp shapes
 
 def from_run(pat, need=None):            # b{B} run: the file IS the cut
-    """A RUNNING sweep looks exactly like a finished one from the outside: the file simply has
-    fewer lines. Dividing its solved count by the full benchmark size reports a partial run as
-    a bad arm, so the record count is checked against the target count and a short file is
-    refused rather than scored."""
+    """A running sweep looks like a finished one with fewer lines, so a file short of `need`
+    targets is refused rather than scored as a bad arm."""
     o = collections.defaultdict(list)
     seen = set()
     for f in sorted(glob.glob(pat)):
@@ -107,9 +89,51 @@ def from_parallel(pat):                  # MORetro*: routes[i] paired with found
     return o if o else None
 
 
-# What each (target, run) of a pooled baseline actually spent. USPTO and ChEMBL share one file.
-try: SPEND = json.load(open(f"{SPEND_DIR}/ra_spend_uspto.json"))
+# What each (target, run) of a pooled baseline spent. Run ids do not identify the run set
+# (every RetroAgent experiment shares the eval_* numbering), so the spend file is keyed by
+# the pool's filename rather than left to the caller. RA_SPEND_FILE overrides.
+_POOL_SPEND = {
+    "pooled_menu_match_fa.jsonl":    "ra_spend_menu_match.json",
+    "pooled_menu_ctrl_fa.jsonl":     "ra_spend_menu_ctrl.json",
+    "pooled_menusos_match_fa.jsonl": "ra_spend_menusos_match.json",
+    "pooled_menusos_ctrl_fa.jsonl":  "ra_spend_menusos_ctrl.json",
+}
+_SPEND_F = os.environ.get("RA_SPEND_FILE") or _POOL_SPEND.get(
+    os.path.basename(os.environ.get("RA_uspto",
+                     "data/route_search/pooled_menu_match_fa.jsonl")), "ra_spend_uspto.json")
+try: SPEND = json.load(open(f"{SPEND_DIR}/{_SPEND_F}"))
 except Exception: SPEND = {}
+print(f"  [spend] {_SPEND_F}  ({len(SPEND)} targets)", file=sys.stderr)
+
+# Each pooled run's ORDERED unique expansions per target: what lets from_pooled charge a
+# molecule once per target instead of once per run. Built by runners/extract_expansions.py
+# (uspto) / extract_chembl.py (chembl).
+#
+# IT MUST COME FROM THE SAME RUN DIRECTORY AS THE POOL. `retroagent_rsmiles_t0` and
+# `..._t0_k10` number their experiments alike, so a file from the wrong one passes every
+# check below and charges the pool with another run set's molecules -- nearly every shared
+# target gets a different sequence. Picked from the pool path for that reason;
+# override both together with RA_uspto + POOL_EXPANSIONS.
+_RA_POOL = os.environ.get("RA_uspto", "data/route_search/pooled_retroagent_rsmiles_k10_fa.jsonl")
+_EXPF = os.environ.get("POOL_EXPANSIONS",
+                       f"{SPEND_DIR}/expansions_chembl.json" if BENCH == "chembl"
+                       else f"{SPEND_DIR}/expansions_k10.json" if "_k10" in _RA_POOL
+                       else f"{SPEND_DIR}/expansions.json")
+try: EXP = json.load(open(_EXPF))
+except Exception as e:
+    sys.exit(f"!! union accounting needs {_EXPF} ({e}). Build it with "
+             f"runners/extract_expansions.py (uspto) / runners/extract_chembl.py (chembl).")
+print(f"  [union] {_EXPF}  {EXP.pop('_meta', '(no _meta: provenance unknown)')}", file=sys.stderr)
+
+RUN_ARM = {}
+"""run id -> the arm that produced it, filled from each pooled row's own `sources` token."""
+
+
+def _arm_of(run_id):
+    """RUN_ARM's token wins; the id prefix is only a fallback. Run ids are NOT unique across
+    arms -- RetroPlanner's ChEMBL experiments and RetroAgent's share the eval_* numbering."""
+    return RUN_ARM.get(run_id) or (
+        "retro_r1" if str(run_id).startswith("ncurve") else "retroagent")
 
 random.seed(0)
 NPERM = 20
@@ -123,14 +147,20 @@ def _run_id(src):
 
 
 def from_pooled(pat):                    # Retro-R1 / RetroAgent
-    """A pooled baseline file is SEVERAL INDEPENDENT RUNS, and its found_at_calls is a WITHIN-RUN
-    stamp. Cutting it at B keeps each run's first B calls, so the arm silently gets one budget B
-    per run. The runs are therefore laid END TO END: run i starts where run i-1 stopped, each
-    charged what it actually spent (SPEND), with the last route's stamp as a fallback where
-    SPEND has no entry. Order is arbitrary, so NPERM shuffles are drawn and the median-sized
-    result is taken. Rounds of one Retro-R1 run share a run id, so they stay one continuous run.
+    """The file is SEVERAL INDEPENDENT RUNS and found_at_calls is a WITHIN-RUN stamp, so a
+    plain cut at B would give the arm one budget B per run. The runs are laid END TO END as one
+    campaign per target; order is arbitrary, so NPERM shuffles are drawn and the median-sized
+    result taken. Rounds of one Retro-R1 run share a run id and stay one run; single-run pools
+    fall through to the plain stamp cut.
 
-    Single-run pools (no run id) fall through to a plain stamp cut, which is already correct.
+    UNION ACCOUNTING, the only branch. A route stamped `c` in run r was found when r had opened
+    its first `c` unique molecules, so it costs (molecules unique to the runs already laid
+    down) + (how many of those first `c` are new to the campaign). Summing per-run costs paid
+    for a molecule twice -- not the rule any arm applies to itself.
+
+    FILTERED BY RUN-ID FAMILY: SPEND holds both arms in one dict (eval_* = RetroAgent,
+    ncurve_* = Retro-R1), and almost every target carries both, so unfiltered this arm would
+    pay the other one's runs.
     """
     byrun = collections.defaultdict(lambda: collections.defaultdict(list))
     hit = False
@@ -144,37 +174,58 @@ def from_pooled(pat):                    # Retro-R1 / RetroAgent
             hit = True
             s = st_(r.get("steps"))
             if s and gate(s):
-                byrun[r["target"]][_run_id(r.get("sources"))].append((s, float(fa)))
+                _rid = _run_id(r.get("sources"))
+                byrun[r["target"]][_rid].append((s, float(fa)))
+                _src = (r.get("sources") or [[None]])[0]
+                RUN_ARM[_rid] = (_src[0] if isinstance(_src, list) and _src else None)
     if not hit: return None
+
+    def _fam(r):
+        r = str(r)
+        return "eval" if r.startswith("eval_") else ("ncurve" if r.startswith("ncurve") else "other")
+    _fams = {_fam(r) for t in byrun for r in byrun[t]} - {"other"}
+
     out = {}
     for t, runs_ in byrun.items():
-        # Every run that EXECUTED on this target. byrun only holds runs with a route that passed
-        # the gate, so runs that spent budget and failed would otherwise be free and the
-        # cumulative axis would collapse toward within-run.
-        runs = sorted(set(runs_) | set(SPEND.get(t, {})))
+        # Every run that EXECUTED here: byrun only holds runs with a gated route, so runs
+        # that spent budget and failed would otherwise be free.
+        runs = sorted(set(runs_) | {k for k in SPEND.get(t, {}) if _fam(k) in _fams})
         if len(runs) <= 1:
             out[t] = [x for x, c in runs_.get(runs[0], []) if c <= B] if runs else []
             continue
-        cost = {r: float(SPEND.get(t, {}).get(r, max((c for _, c in runs_.get(r, [])), default=0.0)))
-                for r in runs}
         draws = []
         for _ in range(NPERM):
             order = runs[:]; random.shuffle(order)
-            off = 0.0; keep = []
+            seen, off, keep = set(), 0, []
             for r in order:
+                # A run absent from EXP costs nothing, i.e. free budget. Refuse.
+                _a = _arm_of(r)
+                if _a not in EXP or r not in EXP[_a]:
+                    sys.exit(f"!! union accounting: run {r!r} of arm {_a!r} is not in "
+                             f"{_EXPF}. Extract its expansions, or point POOL_EXPANSIONS at "
+                             f"a file that covers the pools being rendered.")
+                seq = EXP[_a][r].get(t, [])
+                newpos, n, loc = [], 0, set()
+                for sm in seq:
+                    if sm not in seen and sm not in loc:
+                        n += 1
+                    loc.add(sm); newpos.append(n)
                 for x, c in runs_.get(r, []):
-                    if off + c <= B: keep.append(x)
-                off += cost[r]
+                    i = min(int(c), len(newpos)) - 1
+                    if off + (newpos[i] if i >= 0 else 0) <= B:
+                        keep.append(x)
+                off += n
+                seen |= set(seq)
             draws.append(keep)
         draws.sort(key=len)
-        out[t] = draws[len(draws)//2]
+        out[t] = draws[len(draws) // 2]
     return {t: v for t, v in out.items() if v}
 
 
 def from_board(pat):                     # RetroPlanner
-    """Every route carries found_at_unique: unique molecules seen when it was found, accumulated
-    across the restarts. It is None in resumed runs (the counter restarts and undercounts);
-    those routes are dropped rather than stamped in another unit."""
+    """found_at_unique = unique molecules seen when the route was found, accumulated across
+    restarts. None in resumed runs (the counter restarts), so those routes are dropped rather
+    than stamped in another unit."""
     o = collections.defaultdict(list)
     hit = False; miss = 0
     for f in sorted(glob.glob(pat)):
@@ -200,9 +251,8 @@ def from_board(pat):                     # RetroPlanner
 # ---------------------------------------------------------------------------- scoring
 
 def _dedup_pool(rs):
-    """Routes reaching the same LEAF SET count as one: a plan's value is what you buy to start
-    from, and counting write-ups of paths to the same stock would report the arm that dug into
-    one spot as the most diverse one."""
+    """Same LEAF SET = one route: a plan's value is what you buy to start from, so counting
+    paths to the same stock would make the arm that dug in one spot the most diverse."""
     seen = {}
     for s_ in rs:
         seen.setdefault(frozenset(D.leaves_of(s_)), s_)
@@ -233,8 +283,8 @@ def pick_idx(A):
 def row(nm, pool, N, GOLD):
     if pool is None:
         return dict(name=nm, solve=None)
-    # Dedup once, here: not only the Routes column but also the pool axes3 sees must shrink --
-    # if POOLCAP fills with duplicates, even the representative route shifts.
+    # Dedup here so the pool axes3 sees shrinks too: if POOLCAP fills with duplicates, even
+    # the representative route shifts.
     pool = {t: _dedup_pool(v) for t, v in pool.items()}
     P, Rr, Pr, NR = [], [], [], []
     btr = 0; n_gold_solved = 0
@@ -258,10 +308,8 @@ def row(nm, pool, N, GOLD):
     return dict(name=nm, solve=100*ns/N, routes=st.mean(NR) if NR else 0.0,
         btr=(100*btr/DENB if DENB else None),
         P=100*sum(P)/DEN, Rr=100*sum(Rr)/DENR,
-        # GEOMETRIC MEAN, not the median. A median over an imputed column has a threshold:
-        # once more than half the targets are unsolved the statistic IS the cap. The geometric
-        # mean moves continuously with coverage, and log space is already this pipeline's
-        # scale for price, chosen because leaf prices are heavy-tailed.
+        # GEOMETRIC MEAN, not the median: a median over an imputed column IS the cap once
+        # over half the targets are unsolved. Log space is already the price scale here.
         Pr=(math.exp((sum(math.log(max(min(x, CAP), 1e-9)) for x in Pr)
                       + math.log(CAP) * (N - len(Pr))) / N) if IMPUTE
             else (math.exp(sum(math.log(max(x, 1e-9)) for x in Pr) / len(Pr))
@@ -300,11 +348,14 @@ if BENCH == "uspto":
         ("Retro*-0",   lambda p: from_run(p, 190), f"{R}/uspto190__rsmiles__retrostar__b{B}__d0.jsonl"),
         ("Retro*",     lambda p: from_run(p, 190), f"{R}/uspto190__rsmiles__retrostar-value__b{B}__d0.jsonl"),
         ("MORetro*",   lambda p: from_run(p, 190), f"{R}/uspto190__rsmiles__moretro-bo-sobol__b{B}__d0*.jsonl"),
-        # 10 USPTO runs each.
         ("Retro-R1",   from_pooled, os.environ.get(
             "R1_uspto", "data/route_search/pooled_retro_r1_rsmiles_t0_fa.jsonl")),
+        # THE MATCHED-MENU RUN: handed RetroPlanner's own score-top-k instead of its own
+        # candidate list (menus of equal size), so the arms differ in the planner, not the
+        # board. ONE experiment -- plain stamp cut, Routes not comparable with a multi-run
+        # pool's, charged out of ra_spend_menu_match.json.
         ("RetroAgent", from_pooled, os.environ.get(
-            "RA_uspto", "data/route_search/pooled_retroagent_rsmiles_k10_fa.jsonl")),
+            "RA_uspto", "data/route_search/pooled_menu_match_fa.jsonl")),
         ("RetroPlanner", from_board, os.environ.get("RP_uspto", "results/forced_iter_retroplanner_emols_div_t06_b300_ep40.jsonl")),
     ])
 elif BENCH == "chembl":
@@ -314,7 +365,6 @@ elif BENCH == "chembl":
         ("Retro*",   lambda p: from_run(p, 1000), f"{R}/chembl1000__rsmiles__retrostar-value__b{B}__d0.jsonl"),
         # The b500 run, sharded; routes are cut at B by their found_at_calls stamps.
         ("MORetro*", from_parallel, f"{R}/chembl1000__rsmiles__moretro-bo-sobol__b500__d0.shard*of350.jsonl"),
-        # 4 ChEMBL runs.
         ("Retro-R1",   from_pooled, os.environ.get(
             "R1_chembl", "data/route_search/pooled_retro_r1_rsmiles_chembl1000_run14.jsonl")),
         ("RetroAgent", from_pooled, os.environ.get(

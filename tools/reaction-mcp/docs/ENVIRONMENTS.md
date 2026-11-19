@@ -16,7 +16,7 @@ These are the only envs the code under `tools/reaction-mcp/` uses.
 
 | env | python | torch | rdkit | used by |
 |-----|--------|-------|-------|---------|
-| `sci-tools-mcp` | 3.11 | 2.13 (cu130) | 2023.09 | the MCP server (`python -m reaction_mcp`), `singlestep_pool_server.py`, the stdlib proxies (`pool_proxy.py`, `menu_cache_proxy.py`, `ssr_shim.py`), `run_reasoning.sh` |
+| `sci-tools-mcp` | 3.11 | 2.13 (cu130) | 2023.09 | the MCP server (`python -m reaction_mcp`), the stdlib proxies (`pool_proxy.py`, `menu_cache_proxy.py`, `ssr_shim.py`), `run_reasoning.sh` |
 | `rsmiles` | 3.10 | 2.0.1 (cu118) | 2023.09 | `rsmiles_server.py` (OpenNMT-py 2.2, pool contract, port 8100); `launch_replicas.sh rsmiles` |
 | `localretro` | 3.11 | 2.4.1 (cu121) | 2026.03 | `localretro_server.py` (DGL 2.4 + dgllife, pool contract, port 8097); `launch_replicas.sh localretro` |
 | `syntheseus-gpu` | 3.11 | 2.8.0 (cu128) | 2026.03 | the SSR fleets: `launch_ssr_fleet.sh` (`predict_standalone.py root_aligned`) and `launch_ssr_fleet_localretro.sh` (`predict_standalone.py localretro`) |
